@@ -29,7 +29,7 @@ function createBackup() {
   const data = fileDB.readDB();
   fs.writeFileSync(backupPath, JSON.stringify(data, null, 2), 'utf8');
   
-  console.log(`Backup created: ${filename}`);
+  console.log(`💾 Backup created: ${filename}`);
   return backupPath;
 }
 
@@ -175,4 +175,45 @@ function exportData() {
   return exportPath;
 }
 
-module.exports = { addRecord, listRecords, updateRecord, deleteRecord, searchRecords, sortRecords, exportData };
+function getVaultStatistics() {
+  const fs = require('fs');
+  const path = require('path');
+  const data = fileDB.readDB();
+  
+  const stats = {
+    totalRecords: data.length,
+    lastModified: null,
+    longestName: null,
+    longestNameLength: 0,
+    earliestRecord: null,
+    latestRecord: null
+  };
+  
+  if (data.length === 0) {
+    return stats;
+  }
+  
+  // Get vault file's last modification time
+  const dbFilePath = path.join(__dirname, '..', 'data', 'vault.json');
+  if (fs.existsSync(dbFilePath)) {
+    const fileStats = fs.statSync(dbFilePath);
+    stats.lastModified = fileStats.mtime;
+  }
+  
+  // Find longest name
+  data.forEach(record => {
+    if (record.name.length > stats.longestNameLength) {
+      stats.longestName = record.name;
+      stats.longestNameLength = record.name.length;
+    }
+  });
+  
+  // Find earliest and latest records by ID (timestamp)
+  const sortedByDate = [...data].sort((a, b) => a.id - b.id);
+  stats.earliestRecord = new Date(sortedByDate[0].id);
+  stats.latestRecord = new Date(sortedByDate[sortedByDate.length - 1].id);
+  
+  return stats;
+}
+
+module.exports = { addRecord, listRecords, updateRecord, deleteRecord, searchRecords, sortRecords, exportData, getVaultStatistics };
