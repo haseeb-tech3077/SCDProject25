@@ -45,7 +45,7 @@ function menu() {
           rl.question('New name: ', name => {
             rl.question('New value: ', value => {
               const updated = db.updateRecord(Number(id), name, value);
-              console.log(updated ? '✅ Record updated!' : '❌ Record not found.');
+              console.log(updated ? '✅ Record updated!' : 'Record not found.');
               menu();
             });
           });
@@ -55,7 +55,7 @@ function menu() {
       case '4':
         rl.question('Enter record ID to delete: ', id => {
           const deleted = db.deleteRecord(Number(id));
-          console.log(deleted ? '🗑️ Record deleted!' : '❌ Record not found.');
+          console.log(deleted ? '🗑️ Record deleted!' : 'Record not found.');
           menu();
         });
         break;
@@ -80,7 +80,7 @@ function menu() {
           const sortField = field.toLowerCase().trim();
           
           if (sortField !== 'name' && sortField !== 'id') {
-            console.log('❌ Invalid field. Please choose "name" or "id".');
+            console.log('Invalid field. Please choose "name" or "id".');
             menu();
             return;
           }
@@ -89,7 +89,7 @@ function menu() {
             const sortOrder = order.toLowerCase().trim();
             
             if (sortOrder !== 'asc' && sortOrder !== 'desc') {
-              console.log('❌ Invalid order. Please choose "asc" or "desc".');
+              console.log('Invalid order. Please choose "asc" or "desc".');
               menu();
               return;
             }
@@ -101,7 +101,7 @@ function menu() {
             } else {
               const fieldName = sortField === 'name' ? 'Name' : 'Creation Date (ID)';
               const orderName = sortOrder === 'asc' ? 'Ascending' : 'Descending';
-              console.log(`\n📊 Sorted by ${fieldName} (${orderName}):`);
+              console.log(`\nSorted by ${fieldName} (${orderName}):`);
               sortedRecords.forEach((r, index) => {
                 console.log(`${index + 1}. ID: ${r.id} | Name: ${r.name} | Value: ${r.value}`);
               });
@@ -114,10 +114,10 @@ function menu() {
       case '7':
         try {
           const exportPath = db.exportData();
-          console.log('✅ Data exported successfully to export.txt');
-          console.log(`📁 File location: ${exportPath}`);
+          console.log('Data exported successfully to export.txt');
+          console.log(`File location: ${exportPath}`);
         } catch (error) {
-          console.log('❌ Error exporting data:', error.message);
+          console.log('Error exporting data:', error.message);
         }
         menu();
         break;

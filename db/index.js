@@ -2,6 +2,37 @@ const fileDB = require('./file');
 const recordUtils = require('./record');
 const vaultEvents = require('../events');
 
+// Backup function
+function createBackup() {
+  const fs = require('fs');
+  const path = require('path');
+  
+  // Create backups directory if it doesn't exist
+  const backupsDir = path.join(__dirname, '..', '..', 'backups');
+  if (!fs.existsSync(backupsDir)) {
+    fs.mkdirSync(backupsDir, { recursive: true });
+  }
+  
+  // Get current date and time for filename
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  
+  const filename = `backup_${year}-${month}-${day}_${hours}-${minutes}-${seconds}.json`;
+  const backupPath = path.join(backupsDir, filename);
+  
+  // Read current vault data and create backup
+  const data = fileDB.readDB();
+  fs.writeFileSync(backupPath, JSON.stringify(data, null, 2), 'utf8');
+  
+  console.log(`Backup created: ${filename}`);
+  return backupPath;
+}
+
 function addRecord({ name, value }) {
   recordUtils.validateRecord({ name, value });
   const data = fileDB.readDB();
@@ -9,6 +40,10 @@ function addRecord({ name, value }) {
   data.push(newRecord);
   fileDB.writeDB(data);
   vaultEvents.emit('recordAdded', newRecord);
+  
+  // Create automatic backup
+  createBackup();
+  
   return newRecord;
 }
 
@@ -34,6 +69,10 @@ function deleteRecord(id) {
   data = data.filter(r => r.id !== id);
   fileDB.writeDB(data);
   vaultEvents.emit('recordDeleted', record);
+  
+  // Create automatic backup
+  createBackup();
+  
   return record;
 }
 
