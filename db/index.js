@@ -49,4 +49,27 @@ function searchRecords(keyword) {
   });
 }
 
-module.exports = { addRecord, listRecords, updateRecord, deleteRecord, searchRecords };
+function sortRecords(field, order) {
+  const data = fileDB.readDB();
+  // Create a copy to avoid modifying the original array
+  const sortedData = [...data];
+  
+  sortedData.sort((a, b) => {
+    let comparison = 0;
+    
+    if (field === 'name') {
+      // Case-insensitive name comparison
+      comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    } else if (field === 'id') {
+      // ID comparison (creation date, since ID is timestamp)
+      comparison = a.id - b.id;
+    }
+    
+    // Reverse for descending order
+    return order === 'desc' ? -comparison : comparison;
+  });
+  
+  return sortedData;
+}
+
+module.exports = { addRecord, listRecords, updateRecord, deleteRecord, searchRecords, sortRecords };
