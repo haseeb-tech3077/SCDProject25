@@ -72,4 +72,68 @@ function sortRecords(field, order) {
   return sortedData;
 }
 
-module.exports = { addRecord, listRecords, updateRecord, deleteRecord, searchRecords, sortRecords };
+function exportData() {
+  const fs = require('fs');
+  const path = require('path');
+  const data = fileDB.readDB();
+  
+  // Generate export file path (root directory)
+  const exportPath = path.join(__dirname, '..', '..', 'export.txt');
+  
+  // Get current date and time
+  const now = new Date();
+  const exportDate = now.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  const exportTime = now.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit' 
+  });
+  
+  // Build the export content
+  let content = '';
+  content += '═══════════════════════════════════════════════════════════\n';
+  content += '                    NODEVAULT DATA EXPORT                  \n';
+  content += '═══════════════════════════════════════════════════════════\n';
+  content += '\n';
+  content += `Export Date: ${exportDate}\n`;
+  content += `Export Time: ${exportTime}\n`;
+  content += `Total Records: ${data.length}\n`;
+  content += `File Name: export.txt\n`;
+  content += '\n';
+  content += '═══════════════════════════════════════════════════════════\n';
+  content += '                         RECORDS                           \n';
+  content += '═══════════════════════════════════════════════════════════\n';
+  content += '\n';
+  
+  if (data.length === 0) {
+    content += 'No records found in the vault.\n';
+  } else {
+    data.forEach((record, index) => {
+      content += `Record #${index + 1}\n`;
+      content += `${'─'.repeat(59)}\n`;
+      content += `ID:    ${record.id}\n`;
+      content += `Name:  ${record.name}\n`;
+      content += `Value: ${record.value}\n`;
+      
+      // Convert timestamp ID to readable date
+      const createdDate = new Date(record.id);
+      content += `Created: ${createdDate.toLocaleString('en-US')}\n`;
+      content += '\n';
+    });
+  }
+  
+  content += '═══════════════════════════════════════════════════════════\n';
+  content += '                      END OF EXPORT                        \n';
+  content += '═══════════════════════════════════════════════════════════\n';
+  
+  // Write to file
+  fs.writeFileSync(exportPath, content, 'utf8');
+  
+  return exportPath;
+}
+
+module.exports = { addRecord, listRecords, updateRecord, deleteRecord, searchRecords, sortRecords, exportData };
