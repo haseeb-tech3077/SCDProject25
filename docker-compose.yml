@@ -1,0 +1,34 @@
+
+services:
+  mongo:
+    image: mongo:6
+    container_name: nodevault-mongo
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - nodevault-net
+
+  backend:
+    build: .
+    container_name: nodevault-backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      DB_NAME: nodevault
+      NODE_ENV: development
+      PORT: 3000
+    depends_on:
+      - mongo
+    networks:
+      - nodevault-net
+
+volumes:
+  mongo_data:
+
+networks:
+  nodevault-net:
+    driver: bridge
+
