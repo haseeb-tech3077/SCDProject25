@@ -1,19 +1,19 @@
-const fileDB = require('./file');
+const { getCollection, closeDB } = require('./mongo');
 const recordUtils = require('./record');
 const vaultEvents = require('../events');
+const fs = require('fs');
+const path = require('path');
 
-// Backup function
+// Collection name
+const COLLECTION_NAME = 'records';
+
+// Backup function (keeps file backup for safety)
 function createBackup() {
-  const fs = require('fs');
-  const path = require('path');
-  
-  // Create backups directory if it doesn't exist
   const backupsDir = path.join(__dirname, '..', '..', 'backups');
   if (!fs.existsSync(backupsDir)) {
     fs.mkdirSync(backupsDir, { recursive: true });
   }
   
-  // Get current date and time for filename
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -25,101 +25,114 @@ function createBackup() {
   const filename = `backup_${year}-${month}-${day}_${hours}-${minutes}-${seconds}.json`;
   const backupPath = path.join(backupsDir, filename);
   
-  // Read current vault data and create backup
-  const data = fileDB.readDB();
-  fs.writeFileSync(backupPath, JSON.stringify(data, null, 2), 'utf8');
-  
-  console.log(`💾 Backup created: ${filename}`);
-  return backupPath;
+  // Note: This is now async - we'll handle it properly
+  return { filename, backupPath };
 }
 
-function addRecord({ name, value }) {
+async function addRecord({ name, value }) {
   recordUtils.validateRecord({ name, value });
-  const data = fileDB.readDB();
-  const newRecord = { id: recordUtils.generateId(), name, value };
-  data.push(newRecord);
-  fileDB.writeDB(data);
+  
+  const collection = await getCollection(COLLECTION_NAME);
+  const newRecord = { 
+    id: recordUtils.generateId(), 
+    name, 
+    value,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  
+  await collection.insertOne(newRecord);
   vaultEvents.emit('recordAdded', newRecord);
   
-  // Create automatic backup
-  createBackup();
+  // Create backup asynchronously
+  const backupInfo = createBackup();
+  const allRecords = await listRecords();
+  fs.writeFileSync(backupInfo.backupPath, JSON.stringify(allRecords, null, 2), 'utf8');
+  console.log(`💾 Backup created: ${backupInfo.filename}`);
   
   return newRecord;
 }
 
-function listRecords() {
-  return fileDB.readDB();
+async function listRecords() {
+  const collection = await getCollection(COLLECTION_NAME);
+  const records = await collection.find({}).toArray();
+  return records;
 }
 
-function updateRecord(id, newName, newValue) {
-  const data = fileDB.readDB();
-  const record = data.find(r => r.id === id);
-  if (!record) return null;
-  record.name = newName;
-  record.value = newValue;
-  fileDB.writeDB(data);
-  vaultEvents.emit('recordUpdated', record);
-  return record;
+async function updateRecord(id, newName, newValue) {
+  const collection = await getCollection(COLLECTION_NAME);
+  
+  const result = await collection.findOneAndUpdate(
+    { id: id },
+    { 
+      $set: { 
+        name: newName, 
+        value: newValue,
+        updatedAt: new Date()
+      } 
+    },
+    { returnDocument: 'after' }
+  );
+  
+  if (!result) return null;
+  
+  vaultEvents.emit('recordUpdated', result);
+  return result;
 }
 
-function deleteRecord(id) {
-  let data = fileDB.readDB();
-  const record = data.find(r => r.id === id);
+async function deleteRecord(id) {
+  const collection = await getCollection(COLLECTION_NAME);
+  
+  const record = await collection.findOne({ id: id });
   if (!record) return null;
-  data = data.filter(r => r.id !== id);
-  fileDB.writeDB(data);
+  
+  await collection.deleteOne({ id: id });
   vaultEvents.emit('recordDeleted', record);
   
-  // Create automatic backup
-  createBackup();
+  // Create backup
+  const backupInfo = createBackup();
+  const allRecords = await listRecords();
+  fs.writeFileSync(backupInfo.backupPath, JSON.stringify(allRecords, null, 2), 'utf8');
+  console.log(`💾 Backup created: ${backupInfo.filename}`);
   
   return record;
 }
 
-function searchRecords(keyword) {
-  const data = fileDB.readDB();
+async function searchRecords(keyword) {
+  const collection = await getCollection(COLLECTION_NAME);
   const searchTerm = keyword.toLowerCase();
   
   // Search by name (case-insensitive) or by ID (exact match)
-  return data.filter(record => {
-    const nameMatch = record.name.toLowerCase().includes(searchTerm);
-    const idMatch = record.id.toString() === keyword;
-    return nameMatch || idMatch;
-  });
+  const records = await collection.find({
+    $or: [
+      { name: { $regex: searchTerm, $options: 'i' } },
+      { id: parseInt(keyword) || -1 }
+    ]
+  }).toArray();
+  
+  return records;
 }
 
-function sortRecords(field, order) {
-  const data = fileDB.readDB();
-  // Create a copy to avoid modifying the original array
-  const sortedData = [...data];
+async function sortRecords(field, order) {
+  const collection = await getCollection(COLLECTION_NAME);
   
-  sortedData.sort((a, b) => {
-    let comparison = 0;
-    
-    if (field === 'name') {
-      // Case-insensitive name comparison
-      comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-    } else if (field === 'id') {
-      // ID comparison (creation date, since ID is timestamp)
-      comparison = a.id - b.id;
-    }
-    
-    // Reverse for descending order
-    return order === 'desc' ? -comparison : comparison;
-  });
+  const sortDirection = order === 'desc' ? -1 : 1;
+  const sortField = field === 'name' ? 'name' : 'id';
   
-  return sortedData;
+  const records = await collection
+    .find({})
+    .collation({ locale: 'en', strength: 2 }) // Case-insensitive sorting
+    .sort({ [sortField]: sortDirection })
+    .toArray();
+  
+  return records;
 }
 
-function exportData() {
-  const fs = require('fs');
-  const path = require('path');
-  const data = fileDB.readDB();
+async function exportData() {
+  const data = await listRecords();
   
-  // Generate export file path (root directory)
   const exportPath = path.join(__dirname, '..', '..', 'export.txt');
   
-  // Get current date and time
   const now = new Date();
   const exportDate = now.toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -132,20 +145,20 @@ function exportData() {
     second: '2-digit' 
   });
   
-  // Build the export content
   let content = '';
-  content += '═══════════════════════════════════════════════════════════\n';
+  content += '╔═══════════════════════════════════════════════════════════╗\n';
   content += '                    NODEVAULT DATA EXPORT                  \n';
-  content += '═══════════════════════════════════════════════════════════\n';
+  content += '╚═══════════════════════════════════════════════════════════╝\n';
   content += '\n';
   content += `Export Date: ${exportDate}\n`;
   content += `Export Time: ${exportTime}\n`;
   content += `Total Records: ${data.length}\n`;
   content += `File Name: export.txt\n`;
+  content += `Database: MongoDB\n`;
   content += '\n';
-  content += '═══════════════════════════════════════════════════════════\n';
+  content += '╔═══════════════════════════════════════════════════════════╗\n';
   content += '                         RECORDS                           \n';
-  content += '═══════════════════════════════════════════════════════════\n';
+  content += '╚═══════════════════════════════════════════════════════════╝\n';
   content += '\n';
   
   if (data.length === 0) {
@@ -158,27 +171,24 @@ function exportData() {
       content += `Name:  ${record.name}\n`;
       content += `Value: ${record.value}\n`;
       
-      // Convert timestamp ID to readable date
       const createdDate = new Date(record.id);
       content += `Created: ${createdDate.toLocaleString('en-US')}\n`;
       content += '\n';
     });
   }
   
-  content += '═══════════════════════════════════════════════════════════\n';
+  content += '╔═══════════════════════════════════════════════════════════╗\n';
   content += '                      END OF EXPORT                        \n';
-  content += '═══════════════════════════════════════════════════════════\n';
+  content += '╚═══════════════════════════════════════════════════════════╝\n';
   
-  // Write to file
   fs.writeFileSync(exportPath, content, 'utf8');
   
   return exportPath;
 }
 
-function getVaultStatistics() {
-  const fs = require('fs');
-  const path = require('path');
-  const data = fileDB.readDB();
+async function getVaultStatistics() {
+  const collection = await getCollection(COLLECTION_NAME);
+  const data = await collection.find({}).toArray();
   
   const stats = {
     totalRecords: data.length,
@@ -193,11 +203,15 @@ function getVaultStatistics() {
     return stats;
   }
   
-  // Get vault file's last modification time
-  const dbFilePath = path.join(__dirname, '..', 'data', 'vault.json');
-  if (fs.existsSync(dbFilePath)) {
-    const fileStats = fs.statSync(dbFilePath);
-    stats.lastModified = fileStats.mtime;
+  // Get most recent update time
+  const mostRecent = await collection
+    .find({})
+    .sort({ updatedAt: -1 })
+    .limit(1)
+    .toArray();
+  
+  if (mostRecent.length > 0) {
+    stats.lastModified = mostRecent[0].updatedAt;
   }
   
   // Find longest name
@@ -216,4 +230,14 @@ function getVaultStatistics() {
   return stats;
 }
 
-module.exports = { addRecord, listRecords, updateRecord, deleteRecord, searchRecords, sortRecords, exportData, getVaultStatistics };
+module.exports = { 
+  addRecord, 
+  listRecords, 
+  updateRecord, 
+  deleteRecord, 
+  searchRecords, 
+  sortRecords, 
+  exportData, 
+  getVaultStatistics,
+  closeDB 
+};
