@@ -37,4 +37,16 @@ function deleteRecord(id) {
   return record;
 }
 
-module.exports = { addRecord, listRecords, updateRecord, deleteRecord };
+function searchRecords(keyword) {
+  const data = fileDB.readDB();
+  const searchTerm = keyword.toLowerCase();
+  
+  // Search by name (case-insensitive) or by ID (exact match)
+  return data.filter(record => {
+    const nameMatch = record.name.toLowerCase().includes(searchTerm);
+    const idMatch = record.id.toString() === keyword;
+    return nameMatch || idMatch;
+  });
+}
+
+module.exports = { addRecord, listRecords, updateRecord, deleteRecord, searchRecords };
