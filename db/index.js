@@ -25,7 +25,7 @@ function createBackup() {
   const filename = `backup_${year}-${month}-${day}_${hours}-${minutes}-${seconds}.json`;
   const backupPath = path.join(backupsDir, filename);
   
-  // Note: This is now async - we'll handle it properly
+
   return { filename, backupPath };
 }
 
@@ -48,7 +48,7 @@ async function addRecord({ name, value }) {
   const backupInfo = createBackup();
   const allRecords = await listRecords();
   fs.writeFileSync(backupInfo.backupPath, JSON.stringify(allRecords, null, 2), 'utf8');
-  console.log(`💾 Backup created: ${backupInfo.filename}`);
+  console.log(`Backup created: ${backupInfo.filename}`);
   
   return newRecord;
 }
@@ -93,7 +93,7 @@ async function deleteRecord(id) {
   const backupInfo = createBackup();
   const allRecords = await listRecords();
   fs.writeFileSync(backupInfo.backupPath, JSON.stringify(allRecords, null, 2), 'utf8');
-  console.log(`💾 Backup created: ${backupInfo.filename}`);
+  console.log(`Backup created: ${backupInfo.filename}`);
   
   return record;
 }
@@ -156,9 +156,9 @@ async function exportData() {
   content += `File Name: export.txt\n`;
   content += `Database: MongoDB\n`;
   content += '\n';
-  content += '╔═══════════════════════════════════════════════════════════╗\n';
-  content += '                         RECORDS                           \n';
-  content += '╚═══════════════════════════════════════════════════════════╝\n';
+  content += '═══════════════════════════════════════════════════════════\n';
+  content += '                        RECORDS                          \n';
+  content += '═══════════════════════════════════════════════════════════\n';
   content += '\n';
   
   if (data.length === 0) {
@@ -177,9 +177,9 @@ async function exportData() {
     });
   }
   
-  content += '╔═══════════════════════════════════════════════════════════╗\n';
+  content += '═══════════════════════════════════════════════════════════\n';
   content += '                      END OF EXPORT                        \n';
-  content += '╚═══════════════════════════════════════════════════════════╝\n';
+  content += '═══════════════════════════════════════════════════════════\n';
   
   fs.writeFileSync(exportPath, content, 'utf8');
   
